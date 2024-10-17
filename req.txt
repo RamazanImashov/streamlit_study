@@ -1,0 +1,5 @@
+streamlit
+requests
+fpdf
+cloudinary
+python-decouple==3.8
