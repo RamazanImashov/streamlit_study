@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Код клиента</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            width: 1300px;
+            height: auto;
+            border: 2px solid #ccc;
+            padding: 20px;
+            position: relative;
+        }
+
+        .logo {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 180px;
+        }
+
+        .client-info {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            text-align: right;
+        }
+
+        .client-info h2 {
+            margin: 0;
+            font-size: 32px;
+        }
+
+        .client-info p {
+            margin: 5px 0;
+            font-size: 18px;
+        }
+
+        .contact-section {
+            position: absolute;
+            top: 180px;
+            right: 20px;
+            text-align: right;
+        }
+
+        .contact-section h2 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .contact-section p {
+            margin: 5px 0;
+            font-size: 18px;
+        }
+
+        .social-media-section {
+            position: absolute;
+            top: 360px;
+            right: 20px;
+            text-align: right;
+        }
+
+        .social-media-section h2 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .social-media-section p {
+            margin: 5px 0;
+            font-size: 18px;
+        }
+
+        .warehouse-section {
+            width: 100%;  /* Увеличение ширины секции для размещения двух колонок */
+            margin-top: 140px;
+        }
+
+        .warehouse-section h2 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .warehouse-list {
+            column-count: 2; /* Создаем два столбика */
+            column-gap: 40px; /* Добавляем промежуток между колонками */
+            margin: 0 0 25px 0;
+        }
+
+        /* Добавляем отступ между блоками адреса и телефона */
+        .warehouse-list div {
+            margin-bottom: 20px; /* Отступ между блоками адреса и телефона */
+        }
+
+        .warehouse-list p {
+            margin: 0 0 5px 0; /* Добавляем отступы между адресом и телефоном внутри блока */
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Логотип -->
+        <img src="../img/company_logo3.png" class="logo" alt="Company Logo">
+
+        <!-- Информация о клиенте -->
+        <div class="client-info">
+            <h2>Код клиента: {{ client_code }}</h2>
+            <p>Клиент: {{ client_name }}</p>
+            <p>Телефон: {{ client_phone }}</p>
+        </div>
+
+        <!-- Контакты компании -->
+        <div class="contact-section">
+            <h2>Контакты компании:</h2>
+            <p>Почта: {{ company_email }}</p>
+            <p>Адрес: {{ company_address }}</p>
+            <p>Телефон: {{ company_phone }}</p>
+        </div>
+
+        <div class="social-media-section">
+            <h2>Наши соцсети:</h2>
+            <div class="social-media-list">
+                {% for social in social_media %}
+                <p><strong>{{ social.platform_name }}:</strong> <a href="{{ social.url }}">{{ social.url }}</a></p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Адреса складов -->
+        <div class="warehouse-section">
+            <h2>Адреса складов:</h2>
+            <div class="warehouse-list">
+                {% for warehouse in warehouse_data %}
+                <div>
+                    <p>{{ warehouse.name }}: {{ warehouse.address }}</p>
+                    <p>Телефон склада: {{ warehouse.phone_number }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

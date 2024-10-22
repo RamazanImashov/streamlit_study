@@ -1,0 +1,74 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    width: 1000px;
+    height: 500px;
+    border: 2px solid #ccc;
+    padding: 20px;
+    position: relative;
+}
+
+.logo {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 180px;
+}
+
+.client-info {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    text-align: right;
+}
+
+.client-info h2 {
+    margin: 0;
+    font-size: 32px;
+}
+
+.client-info p {
+    margin: 5px 0;
+    font-size: 18px;
+}
+
+.warehouse-section {
+    position: absolute;
+    top: 150px;
+    left: 20px;
+    width: 950px;  /* Делаем секцию шире */
+}
+
+.warehouse-section h3 {
+    font-size: 22px;
+    margin-bottom: 10px;
+}
+
+.warehouse-list {
+    display: flex;
+    justify-content: space-between;
+}
+
+.warehouse-list div {
+    width: 45%;
+}
+
+.contact-section {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+}
+
+.contact-section h3 {
+    font-size: 22px;
+    margin-bottom: 10px;
+}
+
+.contact-section p {
+    margin: 5px 0;
+    font-size: 18px;
+}

@@ -4,7 +4,7 @@ from decouple import config
 
 
 def get_clients():
-    url = config("GET_CLIENT_URL")
+    url = config("CLIENT_API_URL")
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
