@@ -6,7 +6,7 @@ from PIL import Image
 from io import BytesIO
 
 # Подключение к MongoDB
-client = MongoClient("mongodb://localhost:27017")
+client = MongoClient("mongodb://mongodb:27017")
 db = client["logistics"]
 collection = db["shipments"]
 
