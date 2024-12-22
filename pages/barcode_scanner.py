@@ -65,59 +65,43 @@ elif page == "Добавить данные":
 elif page == "Сканирование и сравнение":
     st.title("Сканирование и сравнение")
 
+    # Инструкция для пользователя
+    st.info(
+        "Для использования камеры:\n"
+        "1. Убедитесь, что вы предоставили разрешение на использование камеры в вашем браузере.\n"
+        "2. Если браузер запросил доступ, подтвердите его.\n"
+        "3. Убедитесь, что устройство оснащено рабочей камерой."
+    )
+
     # Проверка наличия камеры
-    st.write("Проверка наличия доступа к камере устройства")
     enable = st.checkbox("Включить камеру")
     if not enable:
         st.warning("Камера отключена. Включите камеру для сканирования.")
+    else:
+        picture = st.camera_input("Take a picture", disabled=not enable)
 
-    # Инструкция для пользователя
-    st.info(
-        "Советы для лучшего результата:\n"
-        "1. Держите камеру устойчиво.\n"
-        "2. Расположите штрих-код так, чтобы он занимал большую часть кадра.\n"
-        "3. Проверьте, чтобы освещение было достаточным."
-    )
+        if picture:
+            st.image(picture, caption="Ваш снимок")
+            # Декодирование QR или штрих-кода
+            image = Image.open(BytesIO(picture.getvalue()))
+            decoded_objects = decode(image)
 
-    picture = st.camera_input("Сделать снимок", disabled=not enable)
+            if decoded_objects:
+                for obj in decoded_objects:
+                    track_code = obj.data.decode("utf-8")
+                    st.write(f"Распознанный трек-код: {track_code}")
 
-    if picture:
-        st.image(picture, caption="Ваш снимок")
-        # Декодирование QR или штрих-кода
-        image = Image.open(BytesIO(picture.getvalue()))
-        width, height = image.size
-
-        # Кадрирование изображения (центрирование на области, где чаще всего находится код)
-        crop_margin = 0.1  # 10% от размера изображения
-        left = int(width * crop_margin)
-        top = int(height * crop_margin)
-        right = int(width * (1 - crop_margin))
-        bottom = int(height * (1 - crop_margin))
-
-        cropped_image = image.crop((left, top, right, bottom))
-
-        # Отображение обрезанного изображения для отладки
-        st.image(cropped_image, caption="Обрезанное изображение для сканирования")
-
-        # Декодирование
-        decoded_objects = decode(cropped_image)
-
-        if decoded_objects:
-            for obj in decoded_objects:
-                track_code = obj.data.decode("utf-8")
-                st.write(f"Распознанный трек-код: {track_code}")
-
-                # Поиск в базе данных
-                cursor.execute("SELECT * FROM shipments WHERE track_code = ?", (track_code,))
-                shipment = cursor.fetchone()
-                if shipment:
-                    st.write("Информация о грузе:", {
-                        "ID": shipment[0],
-                        "Track Code": shipment[1],
-                        "Client Code": shipment[2],
-                        "Description": shipment[3],
-                    })
-                else:
-                    st.warning("Данные по этому трек-коду не найдены.")
-        else:
-            st.error("QR или штрих-код не распознан.")
+                    # Поиск в базе данных
+                    cursor.execute("SELECT * FROM shipments WHERE track_code = ?", (track_code,))
+                    shipment = cursor.fetchone()
+                    if shipment:
+                        st.write("Информация о грузе:", {
+                            "ID": shipment[0],
+                            "Track Code": shipment[1],
+                            "Client Code": shipment[2],
+                            "Description": shipment[3],
+                        })
+                    else:
+                        st.warning("Данные по этому трек-коду не найдены.")
+            else:
+                st.error("QR или штрих-код не распознан.")
