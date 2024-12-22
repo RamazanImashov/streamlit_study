@@ -9,3 +9,4 @@ reportlab
 pandas
 pymongo
 pyzbar
+openpyxl
