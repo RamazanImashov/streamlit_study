@@ -1,44 +1,32 @@
 import streamlit as st
-import sqlite3
+from pymongo import MongoClient
 import pandas as pd
 from pyzbar.pyzbar import decode
 from PIL import Image
 from io import BytesIO
-from decouple import config
 
-Conn_name = config("CONNAME")
+# Подключение к MongoDB
+client = MongoClient("mongodb://localhost:27017")
+db = client["logistics"]
+collection = db["shipments"]
 
-# Подключение к SQLite
-conn = sqlite3.connect(Conn_name)
-cursor = conn.cursor()
-
-# Создание таблицы, если она не существует
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS shipments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    track_code TEXT NOT NULL,
-    client_code TEXT NOT NULL,
-    description TEXT
-)
-''')
-conn.commit()
-
+# Настройка Streamlit
+st.set_page_config(page_title="Логистическая платформа", layout="wide")
 
 # Выбор страницы
-page = st.sidebar.selectbox("Навигация", ["Обзор базы", "Добавить данные", "Сканирование и сравнение"])
+page = st.sidebar.selectbox("Навигация", ["Обзор базы", "Добавить данные", "Сканирование и сравнение", "Загрузка фото"])
 
 if page == "Обзор базы":
     st.title("Обзор базы данных")
 
-    # Загрузка данных из SQLite
-    cursor.execute("SELECT * FROM shipments")
-    data = cursor.fetchall()
-    columns = ["ID", "Track Code", "Client Code", "Description"]
-    df = pd.DataFrame(data, columns=columns)
+    # Загрузка данных из MongoDB
+    data = list(collection.find())
+    for entry in data:
+        entry["_id"] = str(entry["_id"])  # Преобразуем ObjectId в строку для отображения
+    df = pd.DataFrame(data)
 
     # Отображение данных
     st.dataframe(df)
-
 
 elif page == "Добавить данные":
     st.title("Добавить данные в базу")
@@ -51,13 +39,9 @@ elif page == "Добавить данные":
         submitted = st.form_submit_button("Добавить")
 
     if submitted:
-        # Сохранение данных в SQLite
+        # Сохранение данных в MongoDB
         if track_code and client_code:
-            cursor.execute(
-                "INSERT INTO shipments (track_code, client_code, description) VALUES (?, ?, ?)",
-                (track_code, client_code, description),
-            )
-            conn.commit()
+            collection.insert_one({"track_code": track_code, "client_code": client_code, "description": description})
             st.success("Данные успешно добавлены!")
         else:
             st.error("Пожалуйста, заполните все обязательные поля.")
@@ -92,16 +76,39 @@ elif page == "Сканирование и сравнение":
                     st.write(f"Распознанный трек-код: {track_code}")
 
                     # Поиск в базе данных
-                    cursor.execute("SELECT * FROM shipments WHERE track_code = ?", (track_code,))
-                    shipment = cursor.fetchone()
+                    shipment = collection.find_one({"track_code": track_code})
                     if shipment:
-                        st.write("Информация о грузе:", {
-                            "ID": shipment[0],
-                            "Track Code": shipment[1],
-                            "Client Code": shipment[2],
-                            "Description": shipment[3],
-                        })
+                        shipment["_id"] = str(shipment["_id"])
+                        st.write("Информация о грузе:", shipment)
                     else:
                         st.warning("Данные по этому трек-коду не найдены.")
             else:
                 st.error("QR или штрих-код не распознан.")
+
+elif page == "Загрузка фото":
+    st.title("Загрузка фото для обработки")
+
+    # Форма для загрузки изображения
+    uploaded_file = st.file_uploader("Загрузите изображение с QR или штрих-кодом", type=["png", "jpg", "jpeg"])
+
+    if uploaded_file:
+        st.image(uploaded_file, caption="Загруженное изображение")
+
+        # Декодирование QR или штрих-кода
+        image = Image.open(uploaded_file)
+        decoded_objects = decode(image)
+
+        if decoded_objects:
+            for obj in decoded_objects:
+                track_code = obj.data.decode("utf-8")
+                st.write(f"Распознанный трек-код: {track_code}")
+
+                # Поиск в базе данных
+                shipment = collection.find_one({"track_code": track_code})
+                if shipment:
+                    shipment["_id"] = str(shipment["_id"])
+                    st.write("Информация о грузе:", shipment)
+                else:
+                    st.warning("Данные по этому трек-коду не найдены.")
+        else:
+            st.error("QR или штрих-код не распознан.")
