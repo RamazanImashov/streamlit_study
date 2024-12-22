@@ -14,7 +14,7 @@ collection = db["shipments"]
 st.set_page_config(page_title="Логистическая платформа", layout="wide")
 
 # Выбор страницы
-page = st.sidebar.selectbox("Навигация", ["Обзор базы", "Добавить данные", "Сканирование и сравнение", "Загрузка фото"])
+page = st.sidebar.selectbox("Навигация", ["Обзор базы", "Добавить данные", "Сканирование и сравнение", "Загрузка фото", "Удаление записей"])
 
 if page == "Обзор базы":
     st.title("Обзор базы данных")
@@ -112,3 +112,24 @@ elif page == "Загрузка фото":
                     st.warning("Данные по этому трек-коду не найдены.")
         else:
             st.error("QR или штрих-код не распознан.")
+
+elif page == "Удаление записей":
+    st.title("Удаление записей из базы данных")
+
+    # Загрузка данных из MongoDB
+    data = list(collection.find())
+    for entry in data:
+        entry["_id"] = str(entry["_id"])  # Преобразуем ObjectId в строку для отображения
+    df = pd.DataFrame(data)
+
+    # Отображение данных
+    st.dataframe(df)
+
+    # Удаление записи
+    track_code_to_delete = st.text_input("Введите трек-код для удаления")
+    if st.button("Удалить запись"):
+        result = collection.delete_one({"track_code": track_code_to_delete})
+        if result.deleted_count > 0:
+            st.success("Запись успешно удалена!")
+        else:
+            st.error("Запись с указанным трек-кодом не найдена.")
