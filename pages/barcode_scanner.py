@@ -39,6 +39,29 @@ if page == "Обзор базы":
     # Отображение данных
     st.dataframe(df)
 
+
+elif page == "Добавить данные":
+    st.title("Добавить данные в базу")
+
+    # Форма для добавления данных
+    with st.form("add_shipment"):
+        track_code = st.text_input("Трек-код")
+        client_code = st.text_input("Клиентский код")
+        description = st.text_area("Описание", placeholder="Введите описание груза...")
+        submitted = st.form_submit_button("Добавить")
+
+    if submitted:
+        # Сохранение данных в SQLite
+        if track_code and client_code:
+            cursor.execute(
+                "INSERT INTO shipments (track_code, client_code, description) VALUES (?, ?, ?)",
+                (track_code, client_code, description),
+            )
+            conn.commit()
+            st.success("Данные успешно добавлены!")
+        else:
+            st.error("Пожалуйста, заполните все обязательные поля.")
+
 elif page == "Сканирование и сравнение":
     st.title("Сканирование и сравнение")
 
