@@ -5,14 +5,28 @@ from pyzbar.pyzbar import decode
 from PIL import Image
 from io import BytesIO
 import pyheif
+from cachetools import TTLCache, cached
+import asyncio
 
 # Подключение к MongoDB
 client = MongoClient("mongodb://mongodb:27017")
 db = client["logistics"]
 collection = db["shipments"]
 
+# Кэш для ускорения работы
+cache = TTLCache(maxsize=100, ttl=300)
+
 # Настройка Streamlit
 st.set_page_config(page_title="Логистическая платформа", layout="wide")
+
+# Асинхронное извлечение данных из MongoDB
+async def fetch_shipments():
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: list(collection.find({}, {"_id": 0})))
+
+@cached(cache)
+def get_cached_shipments():
+    return list(collection.find({}, {"_id": 0}))
 
 # Выбор страницы
 page = st.sidebar.selectbox("Навигация", [
@@ -22,8 +36,8 @@ page = st.sidebar.selectbox("Навигация", [
 if page == "Обзор базы и Удаление записей":
     st.title("Обзор базы данных")
 
-    # Загрузка данных из MongoDB
-    data = list(collection.find({}, {"_id": 0}))  # Исключаем поле _id
+    # Загрузка данных из MongoDB с кэшированием
+    data = get_cached_shipments()
     df = pd.DataFrame(data)
 
     # Группировка данных по дате добавления
@@ -48,7 +62,6 @@ if page == "Обзор базы и Удаление записей":
                 file_name=f"shipments_{selected_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
     else:
         st.dataframe(df)
 
@@ -119,6 +132,7 @@ elif page == "Добавить данные и Загрузка Excel":
             st.success("Данные успешно добавлены!")
         else:
             st.error("Пожалуйста, заполните все обязательные поля.")
+
 
 elif page == "Сканирование и сравнение":
     st.title("Сканирование и сравнение")
