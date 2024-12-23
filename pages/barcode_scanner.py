@@ -5,7 +5,7 @@ from pyzbar.pyzbar import decode
 from PIL import Image
 from io import BytesIO
 
-client = MongoClient("mongodb://localhost:27017")
+client = MongoClient("mongodb://mongodb:27017")
 db = client["logistics"]
 collection = db["shipments"]
 
@@ -94,7 +94,7 @@ elif page == "Сканирование и сравнение":
     st.title("Загрузка фото для обработки")
 
     # Форма для загрузки изображения
-    uploaded_file = st.file_uploader("Загрузите изображение с QR или штрих-кодом", type=["png", "jpg", "jpeg"])
+    uploaded_file = st.file_uploader("Загрузите изображение с QR или штрих-кодом", type=["png", "jpg", "jpeg", "heic"])
 
     if uploaded_file:
         st.image(uploaded_file, caption="Загруженное изображение")
