@@ -58,6 +58,9 @@ elif page == "Добавить данные и Загрузка Excel":
         try:
             df = pd.read_excel(uploaded_excel)
 
+            # Преобразование track_code в строку
+            df["track_code"] = df["track_code"].astype(str)
+
             # Проверка необходимых колонок
             if not {"track_code", "client_code"}.issubset(df.columns):
                 st.error("Excel файл должен содержать колонки 'track_code' и 'client_code'")
