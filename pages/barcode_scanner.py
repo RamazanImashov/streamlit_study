@@ -86,8 +86,9 @@ elif page == "Добавить данные и Загрузка Excel":
         try:
             df = pd.read_excel(uploaded_excel)
 
-            # Преобразование track_code в строку
-            df["track_code"] = df["track_code"].astype(str)
+            # Преобразование track_code и client_code в строку и объединение разделенных кодов
+            df["track_code"] = df["track_code"].astype(str).str.replace(" ", "")
+            df["client_code"] = df["client_code"].astype(str).str.replace(" ", "")
 
             # Проверка необходимых колонок
             if not {"track_code", "client_code"}.issubset(df.columns):
@@ -122,8 +123,8 @@ elif page == "Добавить данные и Загрузка Excel":
         # Сохранение данных в MongoDB
         if track_code and client_code:
             collection.insert_one({
-                "track_code": track_code,
-                "client_code": client_code,
+                "track_code": track_code.replace(" ", ""),
+                "client_code": client_code.replace(" ", ""),
                 "description": description,
                 "created_at": pd.Timestamp.now(),
                 "arrived": arrived,
@@ -132,7 +133,6 @@ elif page == "Добавить данные и Загрузка Excel":
             st.success("Данные успешно добавлены!")
         else:
             st.error("Пожалуйста, заполните все обязательные поля.")
-
 
 elif page == "Сканирование и сравнение":
     st.title("Сканирование и сравнение")
@@ -164,7 +164,7 @@ elif page == "Сканирование и сравнение":
 
         if decoded_objects:
             for obj in decoded_objects:
-                track_code = obj.data.decode("utf-8")
+                track_code = obj.data.decode("utf-8").replace(" ", "")
                 st.write(f"Распознанный трек-код: {track_code}")
 
                 # Поиск в базе данных
@@ -206,7 +206,7 @@ elif page == "Сканирование и сравнение":
 
             if decoded_objects:
                 for obj in decoded_objects:
-                    track_code = obj.data.decode("utf-8")
+                    track_code = obj.data.decode("utf-8").replace(" ", "")
                     st.write(f"Распознанный трек-код: {track_code}")
 
                     # Поиск в базе данных
