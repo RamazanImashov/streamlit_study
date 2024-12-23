@@ -36,13 +36,19 @@ if page == "Обзор базы и Удаление записей":
 
         # Скачивание таблицы в Excel
         if not filtered_data.empty:
-            excel_file = filtered_data.to_excel(index=False, engine="openpyxl")
+            from io import BytesIO
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                filtered_data.to_excel(writer, index=False)
+            output.seek(0)
+
             st.download_button(
                 label="Скачать таблицу в Excel",
-                data=excel_file,
+                data=output,
                 file_name=f"shipments_{selected_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
     else:
         st.dataframe(df)
 
@@ -125,48 +131,6 @@ elif page == "Сканирование и сравнение":
         "3. Убедитесь, что устройство оснащено рабочей камерой."
     )
 
-    # Сканирование через камеру
-    st.header("Сканирование через камеру")
-    enable = st.checkbox("Включить камеру")
-    if not enable:
-        st.warning("Камера отключена. Включите камеру для сканирования.")
-    else:
-        picture = st.camera_input("Take a picture", disabled=not enable)
-
-        if picture:
-            st.image(picture, caption="Ваш снимок")
-            # Декодирование QR или штрих-кода
-            image = Image.open(BytesIO(picture.getvalue()))
-            decoded_objects = decode(image)
-
-            if decoded_objects:
-                for obj in decoded_objects:
-                    track_code = obj.data.decode("utf-8")
-                    st.write(f"Распознанный трек-код: {track_code}")
-
-                    # Поиск в базе данных
-                    shipment = collection.find_one({"track_code": track_code})
-                    if shipment:
-                        shipment["_id"] = str(shipment["_id"])
-                        st.write("Информация о грузе:", shipment)
-
-                        # Обновление состояния груза
-                        with st.form(f"update_status_{track_code}"):
-                            arrived = st.checkbox("Груз прибыл", value=shipment.get("arrived", False))
-                            issued = st.checkbox("Груз выдан", value=shipment.get("issued", False))
-                            update_submitted = st.form_submit_button("Обновить статус")
-
-                        if update_submitted:
-                            collection.update_one(
-                                {"track_code": track_code},
-                                {"$set": {"arrived": arrived, "issued": issued}}
-                            )
-                            st.success("Статус груза обновлен!")
-                    else:
-                        st.warning("Данные по этому трек-коду не найдены.")
-            else:
-                st.error("QR или штрих-код не распознан.")
-
     # Сканирование через загрузку изображения
     st.header("Сканирование через загрузку изображения")
     uploaded_file = st.file_uploader("Загрузите изображение с QR или штрих-кодом", type=["png", "jpg", "jpeg", "heic"])
@@ -211,3 +175,46 @@ elif page == "Сканирование и сравнение":
                     st.warning("Данные по этому трек-коду не найдены.")
         else:
             st.error("QR или штрих-код не распознан.")
+
+    # Сканирование через камеру
+    st.header("Сканирование через камеру")
+    enable = st.checkbox("Включить камеру")
+    if not enable:
+        st.warning("Камера отключена. Включите камеру для сканирования.")
+    else:
+        picture = st.camera_input("Take a picture", disabled=not enable)
+
+        if picture:
+            st.image(picture, caption="Ваш снимок")
+            # Декодирование QR или штрих-кода
+            image = Image.open(BytesIO(picture.getvalue()))
+            decoded_objects = decode(image)
+
+            if decoded_objects:
+                for obj in decoded_objects:
+                    track_code = obj.data.decode("utf-8")
+                    st.write(f"Распознанный трек-код: {track_code}")
+
+                    # Поиск в базе данных
+                    shipment = collection.find_one({"track_code": track_code})
+                    if shipment:
+                        shipment["_id"] = str(shipment["_id"])
+                        st.write("Информация о грузе:", shipment)
+
+                        # Обновление состояния груза
+                        with st.form(f"update_status_{track_code}"):
+                            arrived = st.checkbox("Груз прибыл", value=shipment.get("arrived", False))
+                            issued = st.checkbox("Груз выдан", value=shipment.get("issued", False))
+                            update_submitted = st.form_submit_button("Обновить статус")
+
+                        if update_submitted:
+                            collection.update_one(
+                                {"track_code": track_code},
+                                {"$set": {"arrived": arrived, "issued": issued}}
+                            )
+                            st.success("Статус груза обновлен!")
+                    else:
+                        st.warning("Данные по этому трек-коду не найдены.")
+            else:
+                st.error("QR или штрих-код не распознан.")
+
