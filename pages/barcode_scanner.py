@@ -4,6 +4,7 @@ import pandas as pd
 from pyzbar.pyzbar import decode
 from PIL import Image
 from io import BytesIO
+import pyheif
 
 client = MongoClient("mongodb://mongodb:27017")
 db = client["logistics"]
@@ -97,10 +98,16 @@ elif page == "Сканирование и сравнение":
     uploaded_file = st.file_uploader("Загрузите изображение с QR или штрих-кодом", type=["png", "jpg", "jpeg", "heic"])
 
     if uploaded_file:
-        st.image(uploaded_file, caption="Загруженное изображение")
+        # Конвертация HEIC в JPEG
+        if uploaded_file.name.endswith(".heic"):
+            heif_file = pyheif.read(uploaded_file.getvalue())
+            image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw", heif_file.mode, heif_file.stride)
+        else:
+            image = Image.open(uploaded_file)
+
+        st.image(image, caption="Загруженное изображение")
 
         # Декодирование QR или штрих-кода
-        image = Image.open(uploaded_file)
         decoded_objects = decode(image)
 
         if decoded_objects:
