@@ -1,5 +1,4 @@
 import streamlit as st
-from pymongo import MongoClient
 import pandas as pd
 from pyzbar.pyzbar import decode
 from PIL import Image
@@ -7,11 +6,27 @@ from io import BytesIO
 import pyheif
 from cachetools import TTLCache, cached
 import asyncio
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from config import (
+    DB_NAME,
+    DB_USER,
+    DB_PASS,
+    DB_HOST,
+    DB_PORT,
+)
 
-# Подключение к MongoDB
-client = MongoClient("mongodb://mongodb:27017")
-db = client["logistics"]
-collection = db["shipments"]
+
+# Подключение к PostgreSQL
+def get_connection():
+    return psycopg2.connect(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST,
+        port=DB_PORT
+    )
+
 
 # Кэш для ускорения работы
 cache = TTLCache(maxsize=100, ttl=300)
@@ -19,14 +34,29 @@ cache = TTLCache(maxsize=100, ttl=300)
 # Настройка Streamlit
 st.set_page_config(page_title="Логистическая платформа", layout="wide")
 
-# Асинхронное извлечение данных из MongoDB
+
+# Асинхронное извлечение данных из PostgreSQL
 async def fetch_shipments():
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, lambda: list(collection.find({}, {"_id": 0})))
+    return await loop.run_in_executor(None, fetch_all_shipments)
+
+
+def fetch_all_shipments():
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute("SELECT * FROM shipments")
+            return cursor.fetchall()
+
 
 @cached(cache)
 def get_cached_shipments():
-    return list(collection.find({}, {"_id": 0}))
+    return fetch_all_shipments()
+
+
+# Функция для преобразования формата даты и времени
+def format_datetime(value):
+    return value.strftime('%d.%m.%Y %H:%M:%S')
+
 
 # Выбор страницы
 page = st.sidebar.selectbox("Навигация", [
@@ -36,30 +66,31 @@ page = st.sidebar.selectbox("Навигация", [
 if page == "Обзор базы и Удаление записей":
     st.title("Обзор базы данных")
 
-    # Загрузка данных из MongoDB с кэшированием
+    # Загрузка данных из PostgreSQL с кэшированием
     data = get_cached_shipments()
     df = pd.DataFrame(data)
 
-    # Группировка данных по дате добавления
+    # Преобразование формата даты
     if "created_at" in df.columns:
         df["created_at"] = pd.to_datetime(df["created_at"])
+        df["created_at"] = df["created_at"].apply(format_datetime)
+
         selected_date = st.date_input("Выберите дату", value=pd.Timestamp.now().date())
-        filtered_data = df[df["created_at"].dt.date == selected_date]
+        filtered_data = df[pd.to_datetime(df["created_at"]).dt.date == selected_date]
         st.subheader(f"Грузы за {selected_date}")
         st.dataframe(filtered_data)
 
         # Скачивание таблицы в Excel
         if not filtered_data.empty:
-            from io import BytesIO
             output = BytesIO()
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                filtered_data.to_excel(writer, index=False)
+                filtered_data.to_excel(writer, index=False, sheet_name="Грузы")
             output.seek(0)
 
             st.download_button(
                 label="Скачать таблицу в Excel",
                 data=output,
-                file_name=f"shipments_{selected_date}.xlsx",
+                file_name=f"Грузы_{selected_date}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
     else:
@@ -70,11 +101,14 @@ if page == "Обзор базы и Удаление записей":
     # Удаление записи
     track_code_to_delete = st.text_input("Введите трек-код для удаления")
     if st.button("Удалить запись"):
-        result = collection.delete_one({"track_code": track_code_to_delete})
-        if result.deleted_count > 0:
-            st.success("Запись успешно удалена!")
-        else:
-            st.error("Запись с указанным трек-кодом не найдена.")
+        with get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM shipments WHERE track_code = %s", (track_code_to_delete,))
+                conn.commit()
+                if cursor.rowcount > 0:
+                    st.success("Запись успешно удалена!")
+                else:
+                    st.error("Запись с указанным трек-кодом не найдена.")
 
 elif page == "Добавить данные и Загрузка Excel":
     st.title("Загрузка Excel в базу данных")
@@ -86,24 +120,34 @@ elif page == "Добавить данные и Загрузка Excel":
         try:
             df = pd.read_excel(uploaded_excel)
 
-            # Преобразование track_code и client_code в строку и объединение разделенных кодов
-            df["track_code"] = df["track_code"].astype(str).str.replace(" ", "")
-            df["client_code"] = df["client_code"].astype(str).str.replace(" ", "")
+            # Преобразование колонок на русский
+            column_mapping = {
+                "track_code": "Трек-код",
+                "client_code": "Код клиента",
+                "description": "Описание"
+            }
+            df.rename(columns=column_mapping, inplace=True)
+
+            # Преобразование track_code и client_code в строку и удаление пробелов
+            df["Трек-код"] = df["Трек-код"].astype(str).str.replace(" ", "")
+            df["Код клиента"] = df["Код клиента"].astype(str).str.replace(" ", "")
 
             # Проверка необходимых колонок
-            if not {"track_code", "client_code"}.issubset(df.columns):
-                st.error("Excel файл должен содержать колонки 'track_code' и 'client_code'")
+            if not {"Трек-код", "Код клиента"}.issubset(df.columns):
+                st.error("Excel файл должен содержать колонки 'Трек-код' и 'Код клиента'")
             else:
-                # Добавление данных в MongoDB
-                for _, row in df.iterrows():
-                    collection.insert_one({
-                        "track_code": row["track_code"],
-                        "client_code": row["client_code"],
-                        "description": row.get("description", ""),
-                        "created_at": pd.Timestamp.now(),
-                        "arrived": False,
-                        "issued": False
-                    })
+                # Добавление данных в PostgreSQL
+                with get_connection() as conn:
+                    with conn.cursor() as cursor:
+                        for _, row in df.iterrows():
+                            cursor.execute(
+                                """
+                                INSERT INTO shipments (track_code, client_code, description, created_at, arrived, issued)
+                                VALUES (%s, %s, %s, NOW(), %s, %s)
+                                """,
+                                (row["Трек-код"], row["Код клиента"], row.get("Описание", ""), False, False)
+                            )
+                        conn.commit()
                 st.success("Данные из Excel успешно загружены в базу!")
         except Exception as e:
             st.error(f"Ошибка при обработке файла: {e}")
@@ -113,23 +157,25 @@ elif page == "Добавить данные и Загрузка Excel":
     # Форма для добавления данных
     with st.form("add_shipment"):
         track_code = st.text_input("Трек-код")
-        client_code = st.text_input("Клиентский код")
+        client_code = st.text_input("Код клиента")
         description = st.text_area("Описание", placeholder="Введите описание груза...")
         arrived = st.checkbox("Груз прибыл")
         issued = st.checkbox("Груз выдан")
         submitted = st.form_submit_button("Добавить")
 
     if submitted:
-        # Сохранение данных в MongoDB
+        # Сохранение данных в PostgreSQL
         if track_code and client_code:
-            collection.insert_one({
-                "track_code": track_code.replace(" ", ""),
-                "client_code": client_code.replace(" ", ""),
-                "description": description,
-                "created_at": pd.Timestamp.now(),
-                "arrived": arrived,
-                "issued": issued
-            })
+            with get_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        INSERT INTO shipments (track_code, client_code, description, created_at, arrived, issued)
+                        VALUES (%s, %s, %s, NOW(), %s, %s)
+                        """,
+                        (track_code.replace(" ", ""), client_code.replace(" ", ""), description, arrived, issued)
+                    )
+                    conn.commit()
             st.success("Данные успешно добавлены!")
         else:
             st.error("Пожалуйста, заполните все обязательные поля.")
@@ -168,10 +214,22 @@ elif page == "Сканирование и сравнение":
                 st.write(f"Распознанный трек-код: {track_code}")
 
                 # Поиск в базе данных
-                shipment = collection.find_one({"track_code": track_code})
+                with get_connection() as conn:
+                    with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                        cursor.execute("SELECT * FROM shipments WHERE track_code = %s", (track_code,))
+                        shipment = cursor.fetchone()
+
                 if shipment:
-                    shipment["_id"] = str(shipment["_id"])
-                    st.write("Информация о грузе:", shipment)
+                    shipment["created_at"] = format_datetime(pd.to_datetime(shipment["created_at"]))
+                    shipment_display = {
+                        "Трек-код": shipment["track_code"],
+                        "Код клиента": shipment["client_code"],
+                        "Описание": shipment["description"],
+                        "Дата добавления": shipment["created_at"],
+                        "Прибыл": "Да" if shipment["arrived"] else "Нет",
+                        "Выдан": "Да" if shipment["issued"] else "Нет"
+                    }
+                    st.write("Информация о грузе:", shipment_display)
 
                     # Обновление состояния груза
                     with st.form(f"update_status_{track_code}_file"):
@@ -180,10 +238,17 @@ elif page == "Сканирование и сравнение":
                         update_submitted = st.form_submit_button("Обновить статус")
 
                     if update_submitted:
-                        collection.update_one(
-                            {"track_code": track_code},
-                            {"$set": {"arrived": arrived, "issued": issued}}
-                        )
+                        with get_connection() as conn:
+                            with conn.cursor() as cursor:
+                                cursor.execute(
+                                    """
+                                    UPDATE shipments
+                                    SET arrived = %s, issued = %s
+                                    WHERE track_code = %s
+                                    """,
+                                    (arrived, issued, track_code)
+                                )
+                                conn.commit()
                         st.success("Статус груза обновлен!")
                 else:
                     st.warning("Данные по этому трек-коду не найдены.")
@@ -210,10 +275,22 @@ elif page == "Сканирование и сравнение":
                     st.write(f"Распознанный трек-код: {track_code}")
 
                     # Поиск в базе данных
-                    shipment = collection.find_one({"track_code": track_code})
+                    with get_connection() as conn:
+                        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                            cursor.execute("SELECT * FROM shipments WHERE track_code = %s", (track_code,))
+                            shipment = cursor.fetchone()
+
                     if shipment:
-                        shipment["_id"] = str(shipment["_id"])
-                        st.write("Информация о грузе:", shipment)
+                        shipment["created_at"] = format_datetime(pd.to_datetime(shipment["created_at"]))
+                        shipment_display = {
+                            "Трек-код": shipment["track_code"],
+                            "Код клиента": shipment["client_code"],
+                            "Описание": shipment["description"],
+                            "Дата добавления": shipment["created_at"],
+                            "Прибыл": "Да" if shipment["arrived"] else "Нет",
+                            "Выдан": "Да" if shipment["issued"] else "Нет"
+                        }
+                        st.write("Информация о грузе:", shipment_display)
 
                         # Обновление состояния груза
                         with st.form(f"update_status_{track_code}"):
@@ -222,13 +299,19 @@ elif page == "Сканирование и сравнение":
                             update_submitted = st.form_submit_button("Обновить статус")
 
                         if update_submitted:
-                            collection.update_one(
-                                {"track_code": track_code},
-                                {"$set": {"arrived": arrived, "issued": issued}}
-                            )
+                            with get_connection() as conn:
+                                with conn.cursor() as cursor:
+                                    cursor.execute(
+                                        """
+                                        UPDATE shipments
+                                        SET arrived = %s, issued = %s
+                                        WHERE track_code = %s
+                                        """,
+                                        (arrived, issued, track_code)
+                                    )
+                                    conn.commit()
                             st.success("Статус груза обновлен!")
                     else:
                         st.warning("Данные по этому трек-коду не найдены.")
             else:
                 st.error("QR или штрих-код не распознан.")
-
