@@ -5,28 +5,10 @@ from PIL import Image
 from io import BytesIO
 import pyheif
 from cachetools import TTLCache, cached
-import asyncio
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from config import (
-    DB_NAME,
-    DB_USER,
-    DB_PASS,
-    DB_HOST,
-    DB_PORT,
-)
+from datetime import datetime
 
-
-# Подключение к PostgreSQL
-def get_connection():
-    return psycopg2.connect(
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASS,
-        host=DB_HOST,
-        port=DB_PORT
-    )
-
+# Инициализация соединения с PostgreSQL через Streamlit
+conn = st.connection("postgresql", type="sql")
 
 # Кэш для ускорения работы
 cache = TTLCache(maxsize=100, ttl=300)
@@ -34,29 +16,9 @@ cache = TTLCache(maxsize=100, ttl=300)
 # Настройка Streamlit
 st.set_page_config(page_title="Логистическая платформа", layout="wide")
 
-
-# Асинхронное извлечение данных из PostgreSQL
-async def fetch_shipments():
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, fetch_all_shipments)
-
-
-def fetch_all_shipments():
-    with get_connection() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute("SELECT * FROM shipments")
-            return cursor.fetchall()
-
-
-@cached(cache)
-def get_cached_shipments():
-    return fetch_all_shipments()
-
-
 # Функция для преобразования формата даты и времени
 def format_datetime(value):
     return value.strftime('%d.%m.%Y %H:%M:%S')
-
 
 # Выбор страницы
 page = st.sidebar.selectbox("Навигация", [
@@ -67,7 +29,11 @@ if page == "Обзор базы и Удаление записей":
     st.title("Обзор базы данных")
 
     # Загрузка данных из PostgreSQL с кэшированием
-    data = get_cached_shipments()
+    @cached(cache)
+    def fetch_all_shipments():
+        return conn.query("SELECT * FROM shipments", ttl="10m")
+
+    data = fetch_all_shipments()
     df = pd.DataFrame(data)
 
     # Преобразование формата даты
@@ -75,7 +41,7 @@ if page == "Обзор базы и Удаление записей":
         df["created_at"] = pd.to_datetime(df["created_at"])
         df["created_at"] = df["created_at"].apply(format_datetime)
 
-        selected_date = st.date_input("Выберите дату", value=pd.Timestamp.now().date())
+        selected_date = st.date_input("Выберите дату", value=datetime.now().date())
         filtered_data = df[pd.to_datetime(df["created_at"]).dt.date == selected_date]
         st.subheader(f"Грузы за {selected_date}")
         st.dataframe(filtered_data)
@@ -101,14 +67,8 @@ if page == "Обзор базы и Удаление записей":
     # Удаление записи
     track_code_to_delete = st.text_input("Введите трек-код для удаления")
     if st.button("Удалить запись"):
-        with get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("DELETE FROM shipments WHERE track_code = %s", (track_code_to_delete,))
-                conn.commit()
-                if cursor.rowcount > 0:
-                    st.success("Запись успешно удалена!")
-                else:
-                    st.error("Запись с указанным трек-кодом не найдена.")
+        conn.execute("DELETE FROM shipments WHERE track_code = :track_code", {"track_code": track_code_to_delete})
+        st.success("Запись успешно удалена!")
 
 elif page == "Добавить данные и Загрузка Excel":
     st.title("Загрузка Excel в базу данных")
@@ -137,17 +97,20 @@ elif page == "Добавить данные и Загрузка Excel":
                 st.error("Excel файл должен содержать колонки 'Трек-код' и 'Код клиента'")
             else:
                 # Добавление данных в PostgreSQL
-                with get_connection() as conn:
-                    with conn.cursor() as cursor:
-                        for _, row in df.iterrows():
-                            cursor.execute(
-                                """
-                                INSERT INTO shipments (track_code, client_code, description, created_at, arrived, issued)
-                                VALUES (%s, %s, %s, NOW(), %s, %s)
-                                """,
-                                (row["Трек-код"], row["Код клиента"], row.get("Описание", ""), False, False)
-                            )
-                        conn.commit()
+                for _, row in df.iterrows():
+                    conn.execute(
+                        """
+                        INSERT INTO shipments (track_code, client_code, description, created_at, arrived, issued)
+                        VALUES (:track_code, :client_code, :description, NOW(), :arrived, :issued)
+                        """,
+                        {
+                            "track_code": row["Трек-код"],
+                            "client_code": row["Код клиента"],
+                            "description": row.get("Описание", ""),
+                            "arrived": False,
+                            "issued": False
+                        }
+                    )
                 st.success("Данные из Excel успешно загружены в базу!")
         except Exception as e:
             st.error(f"Ошибка при обработке файла: {e}")
@@ -166,16 +129,19 @@ elif page == "Добавить данные и Загрузка Excel":
     if submitted:
         # Сохранение данных в PostgreSQL
         if track_code and client_code:
-            with get_connection() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute(
-                        """
-                        INSERT INTO shipments (track_code, client_code, description, created_at, arrived, issued)
-                        VALUES (%s, %s, %s, NOW(), %s, %s)
-                        """,
-                        (track_code.replace(" ", ""), client_code.replace(" ", ""), description, arrived, issued)
-                    )
-                    conn.commit()
+            conn.execute(
+                """
+                INSERT INTO shipments (track_code, client_code, description, created_at, arrived, issued)
+                VALUES (:track_code, :client_code, :description, NOW(), :arrived, :issued)
+                """,
+                {
+                    "track_code": track_code.replace(" ", ""),
+                    "client_code": client_code.replace(" ", ""),
+                    "description": description,
+                    "arrived": arrived,
+                    "issued": issued
+                }
+            )
             st.success("Данные успешно добавлены!")
         else:
             st.error("Пожалуйста, заполните все обязательные поля.")
@@ -214,10 +180,8 @@ elif page == "Сканирование и сравнение":
                 st.write(f"Распознанный трек-код: {track_code}")
 
                 # Поиск в базе данных
-                with get_connection() as conn:
-                    with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                        cursor.execute("SELECT * FROM shipments WHERE track_code = %s", (track_code,))
-                        shipment = cursor.fetchone()
+                result = conn.query("SELECT * FROM shipments WHERE track_code = :track_code", {"track_code": track_code})
+                shipment = result[0] if result else None
 
                 if shipment:
                     shipment["created_at"] = format_datetime(pd.to_datetime(shipment["created_at"]))
@@ -238,17 +202,14 @@ elif page == "Сканирование и сравнение":
                         update_submitted = st.form_submit_button("Обновить статус")
 
                     if update_submitted:
-                        with get_connection() as conn:
-                            with conn.cursor() as cursor:
-                                cursor.execute(
-                                    """
-                                    UPDATE shipments
-                                    SET arrived = %s, issued = %s
-                                    WHERE track_code = %s
-                                    """,
-                                    (arrived, issued, track_code)
-                                )
-                                conn.commit()
+                        conn.execute(
+                            """
+                            UPDATE shipments
+                            SET arrived = :arrived, issued = :issued
+                            WHERE track_code = :track_code
+                            """,
+                            {"arrived": arrived, "issued": issued, "track_code": track_code}
+                        )
                         st.success("Статус груза обновлен!")
                 else:
                     st.warning("Данные по этому трек-коду не найдены.")
@@ -275,10 +236,8 @@ elif page == "Сканирование и сравнение":
                     st.write(f"Распознанный трек-код: {track_code}")
 
                     # Поиск в базе данных
-                    with get_connection() as conn:
-                        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                            cursor.execute("SELECT * FROM shipments WHERE track_code = %s", (track_code,))
-                            shipment = cursor.fetchone()
+                    result = conn.query("SELECT * FROM shipments WHERE track_code = :track_code", {"track_code": track_code})
+                    shipment = result[0] if result else None
 
                     if shipment:
                         shipment["created_at"] = format_datetime(pd.to_datetime(shipment["created_at"]))
@@ -299,17 +258,14 @@ elif page == "Сканирование и сравнение":
                             update_submitted = st.form_submit_button("Обновить статус")
 
                         if update_submitted:
-                            with get_connection() as conn:
-                                with conn.cursor() as cursor:
-                                    cursor.execute(
-                                        """
-                                        UPDATE shipments
-                                        SET arrived = %s, issued = %s
-                                        WHERE track_code = %s
-                                        """,
-                                        (arrived, issued, track_code)
-                                    )
-                                    conn.commit()
+                            conn.execute(
+                                """
+                                UPDATE shipments
+                                SET arrived = :arrived, issued = :issued
+                                WHERE track_code = :track_code
+                                """,
+                                {"arrived": arrived, "issued": issued, "track_code": track_code}
+                            )
                             st.success("Статус груза обновлен!")
                     else:
                         st.warning("Данные по этому трек-коду не найдены.")
