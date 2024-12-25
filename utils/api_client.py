@@ -12,7 +12,6 @@ from config import (
 )
 
 
-@staticmethod
 def get_warehouse_data(params=None) -> List[Dict]:
     try:
         response = requests.get(DEFAULT_API+WAREHOUSE_API_URL, params=params)
@@ -23,7 +22,6 @@ def get_warehouse_data(params=None) -> List[Dict]:
         return []
 
 
-@staticmethod
 def get_clients(params=None) -> List[Dict]:
     try:
         response = requests.get(DEFAULT_API+CLIENT_API_URL, params=params)
@@ -34,7 +32,6 @@ def get_clients(params=None) -> List[Dict]:
         return []
 
 
-@staticmethod
 def get_contacts(params=None) -> List[Dict]:
     try:
         response = requests.get(DEFAULT_API+CONTACT_API_URL, params=params)
@@ -45,7 +42,6 @@ def get_contacts(params=None) -> List[Dict]:
         return []
 
 
-@staticmethod
 def get_social_media(params=None) -> List[Dict]:
     try:
         response = requests.get(DEFAULT_API+SOCIAL_MEDIA_API_URL, params=params)
@@ -56,7 +52,6 @@ def get_social_media(params=None) -> List[Dict]:
         return []
 
 
-@staticmethod
 def get_from_api_orders(params=None):
     try:
         response = requests.get(DEFAULT_API+ORDER_API, params=params)
@@ -67,7 +62,6 @@ def get_from_api_orders(params=None):
         return []
 
 
-@staticmethod
 def get_from_api_order_id(id, params=None):
     try:
         response = requests.get(DEFAULT_API+ORDER_API+id, params=params)
@@ -78,7 +72,6 @@ def get_from_api_order_id(id, params=None):
         return []
 
 
-@staticmethod
 def post_to_api_order(data):
     try:
         response = requests.post(DEFAULT_API+ORDER_API, json=data)
@@ -89,7 +82,6 @@ def post_to_api_order(data):
         return None
 
 
-@staticmethod
 def delete_to_api_order(id, data):
     try:
         response = requests.delete(DEFAULT_API+ORDER_API+id, json=data)
@@ -100,7 +92,6 @@ def delete_to_api_order(id, data):
         return None
 
 
-@staticmethod
 def patch_to_api_order(id, data):
     try:
         response = requests.patch(DEFAULT_API+ORDER_API+id, json=data)
