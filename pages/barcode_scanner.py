@@ -3,22 +3,18 @@ import pandas as pd
 from pyzbar.pyzbar import decode
 from PIL import Image
 from io import BytesIO
-import pyheif
-from cachetools import TTLCache, cached
+import requests
 from datetime import datetime
-
-# Инициализация соединения с PostgreSQL через Streamlit
-conn = st.connection("postgresql", type="sql")
-
-# Кэш для ускорения работы
-cache = TTLCache(maxsize=100, ttl=300)
+from utils.api_client import get_from_api_orders, post_to_api_order, delete_to_api_order
 
 # Настройка Streamlit
 st.set_page_config(page_title="Логистическая платформа", layout="wide")
 
+
 # Функция для преобразования формата даты и времени
 def format_datetime(value):
     return value.strftime('%d.%m.%Y %H:%M:%S')
+
 
 # Выбор страницы
 page = st.sidebar.selectbox("Навигация", [
@@ -28,12 +24,8 @@ page = st.sidebar.selectbox("Навигация", [
 if page == "Обзор базы и Удаление записей":
     st.title("Обзор базы данных")
 
-    # Загрузка данных из PostgreSQL с кэшированием
-    @cached(cache)
-    def fetch_all_shipments():
-        return conn.query("SELECT * FROM shipments", ttl="10m")
-
-    data = fetch_all_shipments()
+    # Загрузка данных из API
+    data = get_from_api_orders()
     df = pd.DataFrame(data)
 
     # Преобразование формата даты
@@ -66,8 +58,9 @@ if page == "Обзор базы и Удаление записей":
 
     # Удаление записи
     track_code_to_delete = st.text_input("Введите трек-код для удаления")
+    order_id_form_track_code = get_from_api_orders(f"?track_code={track_code_to_delete}")
     if st.button("Удалить запись"):
-        conn.execute("DELETE FROM shipments WHERE track_code = :track_code", {"track_code": track_code_to_delete})
+        delete_to_api_order(order_id_form_track_code., {})
         st.success("Запись успешно удалена!")
 
 elif page == "Добавить данные и Загрузка Excel":
@@ -96,21 +89,13 @@ elif page == "Добавить данные и Загрузка Excel":
             if not {"Трек-код", "Код клиента"}.issubset(df.columns):
                 st.error("Excel файл должен содержать колонки 'Трек-код' и 'Код клиента'")
             else:
-                # Добавление данных в PostgreSQL
+                # Добавление данных через API
                 for _, row in df.iterrows():
-                    conn.execute(
-                        """
-                        INSERT INTO shipments (track_code, client_code, description, created_at, arrived, issued)
-                        VALUES (:track_code, :client_code, :description, NOW(), :arrived, :issued)
-                        """,
-                        {
-                            "track_code": row["Трек-код"],
-                            "client_code": row["Код клиента"],
-                            "description": row.get("Описание", ""),
-                            "arrived": False,
-                            "issued": False
-                        }
-                    )
+                    post_to_api("orders", {
+                        "track_code": row["Трек-код"],
+                        "client_code": row["Код клиента"],
+                        "description": row.get("Описание", "")
+                    })
                 st.success("Данные из Excel успешно загружены в базу!")
         except Exception as e:
             st.error(f"Ошибка при обработке файла: {e}")
@@ -122,26 +107,16 @@ elif page == "Добавить данные и Загрузка Excel":
         track_code = st.text_input("Трек-код")
         client_code = st.text_input("Код клиента")
         description = st.text_area("Описание", placeholder="Введите описание груза...")
-        arrived = st.checkbox("Груз прибыл")
-        issued = st.checkbox("Груз выдан")
         submitted = st.form_submit_button("Добавить")
 
     if submitted:
-        # Сохранение данных в PostgreSQL
+        # Сохранение данных через API
         if track_code and client_code:
-            conn.execute(
-                """
-                INSERT INTO shipments (track_code, client_code, description, created_at, arrived, issued)
-                VALUES (:track_code, :client_code, :description, NOW(), :arrived, :issued)
-                """,
-                {
-                    "track_code": track_code.replace(" ", ""),
-                    "client_code": client_code.replace(" ", ""),
-                    "description": description,
-                    "arrived": arrived,
-                    "issued": issued
-                }
-            )
+            post_to_api("orders", {
+                "track_code": track_code.replace(" ", ""),
+                "client_code": client_code.replace(" ", ""),
+                "description": description
+            })
             st.success("Данные успешно добавлены!")
         else:
             st.error("Пожалуйста, заполните все обязательные поля.")
@@ -149,26 +124,12 @@ elif page == "Добавить данные и Загрузка Excel":
 elif page == "Сканирование и сравнение":
     st.title("Сканирование и сравнение")
 
-    # Инструкция для пользователя
-    st.info(
-        "Для использования камеры:\n"
-        "1. Убедитесь, что вы предоставили разрешение на использование камеры в вашем браузере.\n"
-        "2. Если браузер запросил доступ, подтвердите его.\n"
-        "3. Убедитесь, что устройство оснащено рабочей камерой."
-    )
-
     # Сканирование через загрузку изображения
     st.header("Сканирование через загрузку изображения")
-    uploaded_file = st.file_uploader("Загрузите изображение с QR или штрих-кодом", type=["png", "jpg", "jpeg", "heic"])
+    uploaded_file = st.file_uploader("Загрузите изображение с QR или штрих-кодом", type=["png", "jpg", "jpeg"])
 
     if uploaded_file:
-        # Конвертация HEIC в JPEG
-        if uploaded_file.name.endswith(".heic"):
-            heif_file = pyheif.read(uploaded_file.getvalue())
-            image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data, "raw", heif_file.mode, heif_file.stride)
-        else:
-            image = Image.open(uploaded_file)
-
+        image = Image.open(uploaded_file)
         st.image(image, caption="Загруженное изображение")
 
         # Декодирование QR или штрих-кода
@@ -179,17 +140,15 @@ elif page == "Сканирование и сравнение":
                 track_code = obj.data.decode("utf-8").replace(" ", "")
                 st.write(f"Распознанный трек-код: {track_code}")
 
-                # Поиск в базе данных
-                result = conn.query("SELECT * FROM shipments WHERE track_code = :track_code", {"track_code": track_code})
-                shipment = result[0] if result else None
+                # Поиск в базе данных через API
+                shipment = get_from_api(f"orders/{track_code}")
 
                 if shipment:
-                    shipment["created_at"] = format_datetime(pd.to_datetime(shipment["created_at"]))
                     shipment_display = {
                         "Трек-код": shipment["track_code"],
-                        "Код клиента": shipment["client_code"],
+                        "Клиент": shipment["client_name"],
                         "Описание": shipment["description"],
-                        "Дата добавления": shipment["created_at"],
+                        "Дата добавления": format_datetime(pd.to_datetime(shipment["created_at"])),
                         "Прибыл": "Да" if shipment["arrived"] else "Нет",
                         "Выдан": "Да" if shipment["issued"] else "Нет"
                     }
@@ -202,72 +161,12 @@ elif page == "Сканирование и сравнение":
                         update_submitted = st.form_submit_button("Обновить статус")
 
                     if update_submitted:
-                        conn.execute(
-                            """
-                            UPDATE shipments
-                            SET arrived = :arrived, issued = :issued
-                            WHERE track_code = :track_code
-                            """,
-                            {"arrived": arrived, "issued": issued, "track_code": track_code}
-                        )
+                        post_to_api(f"orders/{track_code}/update", {
+                            "arrived": arrived,
+                            "issued": issued
+                        })
                         st.success("Статус груза обновлен!")
                 else:
                     st.warning("Данные по этому трек-коду не найдены.")
         else:
             st.error("QR или штрих-код не распознан.")
-
-    # Сканирование через камеру
-    st.header("Сканирование через камеру")
-    enable = st.checkbox("Включить камеру")
-    if not enable:
-        st.warning("Камера отключена. Включите камеру для сканирования.")
-    else:
-        picture = st.camera_input("Take a picture", disabled=not enable)
-
-        if picture:
-            st.image(picture, caption="Ваш снимок")
-            # Декодирование QR или штрих-кода
-            image = Image.open(BytesIO(picture.getvalue()))
-            decoded_objects = decode(image)
-
-            if decoded_objects:
-                for obj in decoded_objects:
-                    track_code = obj.data.decode("utf-8").replace(" ", "")
-                    st.write(f"Распознанный трек-код: {track_code}")
-
-                    # Поиск в базе данных
-                    result = conn.query("SELECT * FROM shipments WHERE track_code = :track_code", {"track_code": track_code})
-                    shipment = result[0] if result else None
-
-                    if shipment:
-                        shipment["created_at"] = format_datetime(pd.to_datetime(shipment["created_at"]))
-                        shipment_display = {
-                            "Трек-код": shipment["track_code"],
-                            "Код клиента": shipment["client_code"],
-                            "Описание": shipment["description"],
-                            "Дата добавления": shipment["created_at"],
-                            "Прибыл": "Да" if shipment["arrived"] else "Нет",
-                            "Выдан": "Да" if shipment["issued"] else "Нет"
-                        }
-                        st.write("Информация о грузе:", shipment_display)
-
-                        # Обновление состояния груза
-                        with st.form(f"update_status_{track_code}"):
-                            arrived = st.checkbox("Груз прибыл", value=shipment.get("arrived", False))
-                            issued = st.checkbox("Груз выдан", value=shipment.get("issued", False))
-                            update_submitted = st.form_submit_button("Обновить статус")
-
-                        if update_submitted:
-                            conn.execute(
-                                """
-                                UPDATE shipments
-                                SET arrived = :arrived, issued = :issued
-                                WHERE track_code = :track_code
-                                """,
-                                {"arrived": arrived, "issued": issued, "track_code": track_code}
-                            )
-                            st.success("Статус груза обновлен!")
-                    else:
-                        st.warning("Данные по этому трек-коду не найдены.")
-            else:
-                st.error("QR или штрих-код не распознан.")
