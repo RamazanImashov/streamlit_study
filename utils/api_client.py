@@ -98,3 +98,15 @@ def delete_to_api_order(id, data):
     except requests.RequestException as e:
         st.error(f"Ошибка при отправке данных в API: {e}")
         return None
+
+
+@staticmethod
+def patch_to_api_order(id, data):
+    try:
+        response = requests.patch(DEFAULT_API+ORDER_API+id, json=data)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        st.error(f"Ошибка при отправке данных в API: {e}")
+        return None
+

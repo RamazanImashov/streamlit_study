@@ -5,7 +5,7 @@ from PIL import Image
 from io import BytesIO
 import requests
 from datetime import datetime
-from utils.api_client import get_from_api_orders, post_to_api_order, delete_to_api_order
+from utils.api_client import get_from_api_orders, post_to_api_order, delete_to_api_order, patch_to_api_order
 
 # Настройка Streamlit
 st.set_page_config(page_title="Логистическая платформа", layout="wide")
@@ -58,9 +58,9 @@ if page == "Обзор базы и Удаление записей":
 
     # Удаление записи
     track_code_to_delete = st.text_input("Введите трек-код для удаления")
-    order_id_form_track_code = get_from_api_orders(f"?track_code={track_code_to_delete}")
+    order_id_form_track_code = get_from_api_orders(f"?search={track_code_to_delete}")
     if st.button("Удалить запись"):
-        delete_to_api_order(order_id_form_track_code., {})
+        delete_to_api_order(order_id_form_track_code[0][1], {})
         st.success("Запись успешно удалена!")
 
 elif page == "Добавить данные и Загрузка Excel":
@@ -91,7 +91,7 @@ elif page == "Добавить данные и Загрузка Excel":
             else:
                 # Добавление данных через API
                 for _, row in df.iterrows():
-                    post_to_api("orders", {
+                    post_to_api_order({
                         "track_code": row["Трек-код"],
                         "client_code": row["Код клиента"],
                         "description": row.get("Описание", "")
@@ -112,7 +112,7 @@ elif page == "Добавить данные и Загрузка Excel":
     if submitted:
         # Сохранение данных через API
         if track_code and client_code:
-            post_to_api("orders", {
+            post_to_api_order({
                 "track_code": track_code.replace(" ", ""),
                 "client_code": client_code.replace(" ", ""),
                 "description": description
@@ -141,7 +141,7 @@ elif page == "Сканирование и сравнение":
                 st.write(f"Распознанный трек-код: {track_code}")
 
                 # Поиск в базе данных через API
-                shipment = get_from_api(f"orders/{track_code}")
+                shipment = get_from_api_orders(f"?search={track_code}")
 
                 if shipment:
                     shipment_display = {
@@ -161,7 +161,8 @@ elif page == "Сканирование и сравнение":
                         update_submitted = st.form_submit_button("Обновить статус")
 
                     if update_submitted:
-                        post_to_api(f"orders/{track_code}/update", {
+                        order_id_form_track_code = get_from_api_orders(f"?search={track_code}")
+                        patch_to_api_order(order_id_form_track_code[0][1], {
                             "arrived": arrived,
                             "issued": issued
                         })
