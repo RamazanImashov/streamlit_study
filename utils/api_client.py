@@ -82,14 +82,22 @@ def post_to_api_order(data):
         return None
 
 
-def delete_to_api_order(id, data):
+def delete_to_api_order(order_id, data=None):
+    import requests
+    import streamlit as st
     try:
-        response = requests.delete(DEFAULT_API+ORDER_API+id, json=data)
+        response = requests.delete(f"{DEFAULT_API}{ORDER_API}{order_id}/", json=data)
+        if response.status_code == 204:
+            # Успешное удаление без содержимого в ответе
+            return {"message": "Запись успешно удалена!"}
         response.raise_for_status()
+        # Попытка обработать тело ответа, если оно есть
         return response.json()
     except requests.RequestException as e:
-        st.error(f"Ошибка при отправке данных в API: {e}")
+        st.error(f"Ошибка при удалении записи: {e}")
         return None
+
+
 
 
 def patch_to_api_order(id, data):
