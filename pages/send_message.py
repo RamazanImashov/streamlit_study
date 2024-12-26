@@ -1,6 +1,5 @@
 import streamlit as st
-import requests
-from utils.get_client import get_clients
+from utils.api_client import get_clients
 
 
 clients = get_clients()

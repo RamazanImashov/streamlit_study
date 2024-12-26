@@ -3,7 +3,7 @@ from jinja2 import Template
 import imgkit
 from io import BytesIO
 import os
-from utils import get_clients, get_contacts, get_warehouse_data, get_social_media
+from utils.api_client import get_clients, get_contacts, get_warehouse_data, get_social_media
 
 
 def create_png_from_html(client_data, warehouse_data, contacts, social_media):

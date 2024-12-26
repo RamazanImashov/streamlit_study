@@ -1,4 +1,5 @@
-from utils.get_client import get_clients
+
+from utils.api_client import get_clients
 import streamlit as st
 
 
@@ -16,6 +17,7 @@ selected_client_name = st.selectbox("Выберите клиента", options=l
 selected_client = client_options[selected_client_name]
 
 st.subheader(f"Данные клиента: {selected_client_name}")
+
 
 st.write(f"**Имя:** {selected_client['username']}")
 st.write(f"**Email:** {selected_client['email'] if selected_client['email'] else 'Не указан'}")
