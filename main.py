@@ -4,7 +4,7 @@ pages = {
     "Pages": [
         st.Page("pages/pull_users.py", title="Пользователи"),
         st.Page("pages/send_message.py", title="Отправить сообщение"),
-        st.Page("pages/visit.py", title="Визитка"),
+        st.Page("pages/stats.py", title="Статистика"),
         st.Page("pages/barcode_scanner.py", title="Сканер штрих кода"),
     ],
 }
