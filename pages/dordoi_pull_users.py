@@ -1,9 +1,9 @@
 
-from utils.api_client import get_clients
+from utils.api_client import get_clients_dordoi
 import streamlit as st
 
 
-clients = get_clients()
+clients = get_clients_dordoi()
 
 clients_sorted = sorted(clients, key=lambda client: client["code_client"])
 

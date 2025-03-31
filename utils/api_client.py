@@ -9,6 +9,7 @@ from config import (
     SOCIAL_MEDIA_API_URL,
     CONTACT_API_URL,
     ORDER_API,
+    DORDOI_CLIENT_API_URL
 )
 
 
@@ -25,6 +26,16 @@ def get_warehouse_data(params=None) -> List[Dict]:
 def get_clients(params=None) -> List[Dict]:
     try:
         response = requests.get(DEFAULT_API+CLIENT_API_URL, params=params)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        st.error(f"Не удалось получить данные клиентов: {e}")
+        return []
+    
+    
+def get_clients_dordoi(params=None) -> List[Dict]:
+    try:
+        response = requests.get(DEFAULT_API+DORDOI_CLIENT_API_URL, params=params)
         response.raise_for_status()
         return response.json()
     except Exception as e:
