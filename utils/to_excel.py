@@ -1,3 +1,4 @@
+import io
 
 def to_excel(df):
     output = io.BytesIO()
