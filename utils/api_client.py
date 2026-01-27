@@ -5,7 +5,6 @@ from config import (
     DEFAULT_API,
     WAREHOUSE_API_URL,
     CLIENT_API_URL,
-    DRF_API_URL_FILE,
     SOCIAL_MEDIA_API_URL,
     CONTACT_API_URL,
     ORDER_API,
