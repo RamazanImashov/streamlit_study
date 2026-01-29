@@ -174,7 +174,7 @@ with col2:
     st.success(f"Выбран свободный код: {selected_code}")
 
     first_name = st.text_input("Имя", placeholder="Например: Айбек")
-    last_name = st.text_input("Фамилия", placeholder="Например: Токтогулов")
+    last_name = st.text_input("Фамилия (ОсОО)", placeholder="Например: Токтогулов")
     phone_number = st.text_input("Номер телефона", placeholder="+996...", value="")
     phone_number = norm_phone(phone_number)
 
