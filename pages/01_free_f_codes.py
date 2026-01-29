@@ -20,7 +20,7 @@ RETURN_URL = CONFIG_RETURN_URL
 
 
 def make_code(n: int) -> str:
-    return f"D{n:02d}" if 1 <= n <= 99 else f"D{n}"
+    return f"F{n:02d}" if 1 <= n <= 99 else f"F{n}"
 
 
 def parse_num(code: str) -> int | None:
@@ -76,7 +76,7 @@ def load_used_nums() -> set[int]:
     used = set()
     for c in clients:
         code = (c.get("code_client") or "").strip().upper()
-        if not code.startswith("D"):
+        if not code.startswith("F"):
             continue
         n = parse_num(code)
         if n is None:
@@ -86,15 +86,15 @@ def load_used_nums() -> set[int]:
     return used
 
 
-st.set_page_config(page_title="Коды D01…D500", layout="wide")
-st.title("Коды клиентов D01…D500")
+st.set_page_config(page_title="Коды F01…F500", layout="wide")
+st.title("Коды клиентов F01…F500")
 
 clients = load_clients_cached()
 used_nums = load_used_nums()
 
 with st.expander("Фильтры", expanded=False):
     only_free = st.checkbox("Показывать только свободные", value=False)
-    search = st.text_input("Поиск (D07 / D100 / 7 / 100)", "").strip().upper()
+    search = st.text_input("Поиск (F07 / F100 / 7 / 100)", "").strip().upper()
 
 rows_meta = []
 display_rows = []
