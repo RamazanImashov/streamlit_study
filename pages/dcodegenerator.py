@@ -181,7 +181,7 @@ if st.button("Сгенерировать PNG", type="primary"):
     html = render_html(code_number)
     png_bytes = html_to_png_bytes(html)
 
-    st.image(png_bytes, caption=display_code, use_container_width=True)
+    st.image(png_bytes, caption=display_code, use_column_width=True)
 
     st.download_button(
         "Скачать PNG",
