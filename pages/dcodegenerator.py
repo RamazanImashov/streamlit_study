@@ -73,7 +73,7 @@ def render_html(code_number: str) -> str:
         autoescape=select_autoescape(["html"]),
     )
 
-    tpl = env.get_template("d-code-template-editable.html")
+    tpl = env.get_template("dk-code-template-editable.html")
 
     # ВАЖНО:
     # если в HTML уже написано DK{{ code }},
